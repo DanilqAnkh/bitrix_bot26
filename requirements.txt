@@ -1,0 +1,11 @@
+aiofiles==25.1.0
+httpx==0.28.1
+openai==3.6.0
+pydub==0.25.1
+python-dotenv==1.2.3
+python-telegram-bot==22.8
+requests==2.34.2
+SQLAlchemy==2.0.52
+vosk==0.3.45
+yandex-ai-studio-sdk==0.22.1
+psycopg2-binary==2.9.12
