@@ -1,4 +1,6 @@
 aiofiles==25.1.0
+alembic==1.20.0
+aiofiles==25.1.0
 httpx==0.28.1
 openai==3.6.0
 pydub==0.25.1
@@ -9,3 +11,7 @@ SQLAlchemy==2.0.52
 vosk==0.3.45
 yandex-ai-studio-sdk==0.22.1
 psycopg2-binary==2.9.12
+pycparser==3.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+pydantic_core==2.46.5

@@ -31,6 +31,7 @@ async def main():
             answer = await chat_service.process_question(question=question, telegram_id=0)
 
             print(f"ОТВЕТ: {answer}")
+            await asyncio.sleep(2)
 
         except Exception as error:
             print(f"ОШИБКА: {error}")

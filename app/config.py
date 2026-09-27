@@ -1,19 +1,54 @@
-import os 
-from dotenv import load_dotenv
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+class Settings(BaseSettings):
+    telegram_bot_token: str
 
-YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
-YANDEX_FOLDER_ID = os.getenv("YANDEX_FOLDER_ID")
-YANDEX_MODEL = os.getenv("YANDEX_MODEL")
-YA_SEARCH_INDEX_ID = os.getenv("YA_SEARCH_INDEX_ID")
+    db_host: str
+    db_port: int = 5432
+    db_name: str
+    db_user: str
+    db_password: str
 
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+    yandex_api_key: str
+    yandex_folder_id: str
+    yandex_model: str
+    ya_search_index_id: str = "" 
 
-DB_URL = (f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+    admin_ids: str = ""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8",extra="ignore")
+
+    @property
+    def database_url(self) -> str:
+        return (f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}")
+
+    @property
+    def admin_id_list(self) -> set[int]:
+        if not self.admin_ids.strip():
+            return set()
+
+        return {
+            int(user_id.strip())
+            for user_id in self.admin_ids.split(",")
+            if user_id.strip()
+        }
+
+
+settings = Settings()
+
+TELEGRAM_BOT_TOKEN = settings.telegram_bot_token
+
+DB_HOST = settings.db_host
+DB_PORT = settings.db_port
+DB_NAME = settings.db_name
+DB_USER = settings.db_user
+DB_PASSWORD = settings.db_password
+DB_URL = settings.database_url
+
+YANDEX_API_KEY = settings.yandex_api_key
+YANDEX_FOLDER_ID = settings.yandex_folder_id
+YANDEX_MODEL = settings.yandex_model
+YA_SEARCH_INDEX_ID = settings.ya_search_index_id
+
+ADMIN_IDS = settings.admin_id_list

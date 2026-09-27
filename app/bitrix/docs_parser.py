@@ -13,6 +13,11 @@ from pathlib import Path
 
 import httpx
 
+APIDOCS_BASE = "https://apidocs.bitrix24.com/"
+
+METHOD_RE = re.compile(
+    r"\b([a-z][a-z0-9_]*\.[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?)\b"
+)
 
 SOURCE_URL = "https://github.com/bitrix-tools/b24-rest-docs/archive/refs/heads/main.zip"
 DATA_PATH = Path("data/bitrix")
@@ -26,6 +31,30 @@ DIRS_SELECT = {
     "sdk"
 }
 
+def extract_method_from_content(text: str) -> str | None:
+    h1 = re.search(r"^#\s+(.+)$", text, flags=re.MULTILINE)
+    if h1:
+        m = METHOD_RE.search(h1.group(1))
+        if m:
+            return m.group(1)
+
+    m = METHOD_RE.search(text[:2000])
+    return m.group(1) if m else None
+
+
+def build_metadata(repo_path: Path, file_path: Path, raw_content: str) -> dict:
+    rel = file_path.relative_to(repo_path).as_posix()
+
+    method = extract_method_from_content(raw_content) or file_path.stem.replace("-", ".")
+
+    url_path = rel.removesuffix(".md") + ".html"
+    url = APIDOCS_BASE + url_path
+
+    return {
+        "source": method, 
+        "url": url,      
+        "file_path": rel,  
+    }
 
 def download_repo() -> Path: #Установщик Bitrix24.
     DATA_PATH.mkdir(parents=True, exist_ok=True)
@@ -70,8 +99,8 @@ def normalize_document(text: str) -> str:
     """Очищает Markdown от элементов, не нужных для поиска."""
     text = re.sub(r"\A---.*?---", "", text, flags=re.DOTALL)
     text = re.sub(r"{%.*?%}", "", text, flags=re.DOTALL)
-    text = re.sub(r"!\([^\)]*]\([^)]*\)", "", text)
-    text = re.sub(r"\(([^\)]+)]\([^)]*\)", r"\1", text)
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
     text = re.sub(r"<[^>]+>", "", text)
     text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
     return text.strip()
@@ -96,17 +125,15 @@ def build_documents() -> list[dict[str, str]]:
 
     for file in files:
         try:
-            content = file.read_text(encoding="utf-8")
+            raw_content = file.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
 
-        content = normalize_document(content)
-
+        meta = build_metadata(repository, file, raw_content)
+        content = normalize_document(raw_content)
+    
         if content:
-            documents.append({
-                "source": str(file.relative_to(repository)),
-                "content": content
-            })
+            documents.append({**meta, "content": content})
 
     return documents
 

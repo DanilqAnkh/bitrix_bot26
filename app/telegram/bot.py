@@ -1,11 +1,20 @@
+import asyncio
+import logging
+
 from telegram import ForceReply, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
-from app.config import TELEGRAM_BOT_TOKEN
+from app.config import TELEGRAM_BOT_TOKEN, ADMIN_IDS
+
+from app.services.kb_rebuild import knowledge_base_service
+from app.yandex.assistant import yandex_gpt 
+from app.telegram.utils import split_message
 
 from app.services.chat_service import ChatService
 from app.services.voice_service import voice_service
+
+logger = logging.getLogger(__name__)
 
 chat_service = ChatService()
 
@@ -23,6 +32,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("На данный момент бот не подключен к сети bitrix24, пожалуйста подождите")
 
+_rebuild_lock = asyncio.Lock()
+
+
+async def rebuild_kb_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+
+    if user is None or user.id not in ADMIN_IDS:
+        await update.message.reply_text("У вас нет доступа к этой команде.")
+        return
+
+    if _rebuild_lock.locked():
+        await update.message.reply_text("Пересборка уже идёт, подождите.")
+        return
+
+    async with _rebuild_lock:
+        await update.message.reply_text(
+            "Пересборка базы знаний запущена. Это может занять несколько минут."
+        )
+
+        try:
+            new_index_id = await asyncio.to_thread(
+                knowledge_base_service.rebuild
+            )
+        except Exception as e:
+            logging.exception("Ошибка пересборки KB")
+            await update.message.reply_text(f"Не удалось пересобрать БД: {e}")
+            return
+
+        yandex_gpt.search_index_id = new_index_id
+
+        await update.message.reply_text(
+            f"База знаний пересобрана. Индекс: {new_index_id}"
+        )
+
 
 async def text_mes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
@@ -30,7 +73,8 @@ async def text_mes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     answer = await chat_service.process_question(question = update.message.text, telegram_id=telegram_user.id)
 
-    await update.message.reply_text(answer)
+    for part in split_message(answer):
+        await update.message.reply_text(part)
 
 
 async def voice_mes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -86,7 +130,8 @@ async def voice_mes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     answer = await chat_service.process_question(question=text, telegram_id=update.effective_user.id)
 
-    await update.message.reply_text(answer)
+    for part in split_message(answer):
+        await update.message.reply_text(part)
 
 
 async def error_handler(update, context):
@@ -107,7 +152,7 @@ def create_bot():
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
-    
+    app.add_handler(CommandHandler("rebuild_kb", rebuild_kb_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_mes))
     app.add_handler(MessageHandler(filters.VOICE, voice_mes))
     
